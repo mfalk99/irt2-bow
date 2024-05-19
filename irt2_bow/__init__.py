@@ -4,7 +4,9 @@ _root = Path(__file__).parent.parent
 
 
 class _DIR:
-    IRT2_DATA = _root.parent / "data" / "irt2"
+    DATA_PATH = _root.parent
+    DATA_CONF = _root.parent / "irt2" / "conf" / "datasets"
+    EXPERIMENT_SEED = 31189
 
 
 class ENV:
