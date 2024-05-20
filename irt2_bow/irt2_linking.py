@@ -11,7 +11,15 @@ from tqdm import tqdm
 from irt2.dataset import IRT2
 from irt2.types import MID, VID, RID, Split as IRT2Split
 
-from irt2_bow.utils import get_docs_for_mids, get_heads, get_tails, get_dataset_config, dataset_from_config
+from irt2_bow.utils import (
+    get_docs_for_mids,
+    get_heads,
+    get_tails,
+    get_dataset_config,
+    dataset_from_config,
+    is_blp,
+    is_irt,
+)
 from irt2_bow.elastic import ES_INDEX
 from irt2_bow.elastic import (
     get_client,
@@ -25,7 +33,7 @@ from irt2_bow.types import QueryDoc, Split, LinkingTask
 DEFAULT_MAX_QUERY_DOCS = 10
 
 # The number of MIDs retrieved per query
-N_RETRIEVED_MIDS = 10
+N_RETRIEVED_MIDS = 100
 
 # The Score assigned to vids not found by the retrieval
 MISSING_VID_SCORE = 0
@@ -134,18 +142,8 @@ class LinkingBaseline:
 
         assert len(ow_query_docs) == len(task_mids)
 
-        # select valid vids (vids that belong to the split)
-        train_vids = self.dataset.idmap.split2vids[IRT2Split.train]
-
-        valid_vids = None
-        if split is Split.VALID:
-            valid_vids = train_vids
-        elif split is Split.TEST:
-            # TODO: mit felix abklären
-            # for the 'test' split, the vids can come from the to the train + valid splits
-            validation_vids = self.dataset.idmap.split2vids[IRT2Split.valid]
-            valid_vids = train_vids.union(validation_vids)
-        assert valid_vids is not None
+        # select valid vids that can be selected from
+        valid_vids = self._select_vids(split)
 
         # prepare output writer
         out_fd = open(out, "w")
@@ -214,6 +212,22 @@ class LinkingBaseline:
             )
 
         return documents
+
+    def _select_vids(self, split: Split) -> set[VID]:
+        train_vids = self.dataset.idmap.split2vids[IRT2Split.train]
+        validation_vids = self.dataset.idmap.split2vids[IRT2Split.valid]
+        test_vids = self.dataset.idmap.split2vids[IRT2Split.test]
+
+        if is_blp(self.dataset):
+            if split is Split.VALID:
+                return set.union(train_vids, validation_vids)
+            if split is Split.TEST:
+                return set.union(train_vids, validation_vids, test_vids)
+
+        if is_irt(self.dataset):
+            return train_vids
+
+        raise ValueError("unexpected setup")
 
     def get_connected_mentions(
         self,

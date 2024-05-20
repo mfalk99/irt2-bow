@@ -57,6 +57,16 @@ def dataset_from_config(config: DatasetConfig) -> IRT2:
     return dataset
 
 
+def is_irt(dataset: IRT2) -> bool:
+    loader_name = dataset.meta["loader"].name
+    return loader_name.lower().startswith("irt2")
+
+
+def is_blp(dataset: IRT2) -> bool:
+    loader_name = dataset.meta["loader"].name
+    return loader_name.lower().startswith("blp")
+
+
 def get_heads(vid: VID, rid: RID, dataset: IRT2) -> set[VID]:
     heads = {vid for (vid, _, _) in dataset.graph.select(tails={vid}, edges={rid})}
     return heads
