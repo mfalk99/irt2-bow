@@ -2,7 +2,7 @@ import click
 
 import irt2.evaluation as eval
 
-from irt2_bow.types import Split, Variant, DatasetName
+from irt2_bow.types import Split, DatasetName
 from irt2_bow.utils import get_dataset_config, dataset_from_config
 
 DEFAULT_MAX_RANK = 10
@@ -26,11 +26,6 @@ DEFAULT_MAX_RANK = 10
     type=click.Path(exists=True),
     help="path to tail predictions (csv)",
     required=True,
-)
-@click.option(
-    "--variant",
-    type=click.Choice(Variant.values()),
-    help="the dataset variant",
 )
 @click.option(
     "--split",
@@ -67,7 +62,6 @@ def main(
     dataset_name: str,
     head_task: str,
     tail_task: str,
-    variant: str,
     split: str,
     with_subsampling: bool,
     max_rank: int,
@@ -77,12 +71,11 @@ def main(
     # input validation
     assert max_rank > 0
 
-    variant: Variant = Variant(variant)
     dataset_name: DatasetName = DatasetName(dataset_name)
     split: Split = Split(split)
 
     # load dataset
-    dataset_config = get_dataset_config(name=dataset_name, variant=variant, with_subsampling=with_subsampling)
+    dataset_config = get_dataset_config(name=dataset_name, with_subsampling=with_subsampling)
     dataset = dataset_from_config(dataset_config)
     print(f"Loaded {str(dataset)} from {dataset_config.path}")
 

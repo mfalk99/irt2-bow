@@ -1,6 +1,7 @@
 from elasticsearch import Elasticsearch
 
 from irt2_bow.types import Variant, Split
+from irt2_bow.utils import is_irt, is_blp
 from irt2.dataset import IRT2
 from irt2.types import MID
 
@@ -21,23 +22,27 @@ def ranking_index_for_irt2(dataset: IRT2) -> ES_INDEX:
     raise NotImplementedError()
 
 
-def get_es_index_for_linking(dataset: IRT2, variant: Variant, split: Split | None = None) -> ES_INDEX:
+def get_es_index_for_linking(dataset: IRT2, split: Split | None = None) -> ES_INDEX:
 
-    if split is not None and split is Split.VALID:
-        # validation splits always run on the original (train-only) texts
-        index_name = dataset.name + "-" + Variant.ORIGINAL.value
-    else:
-        index_name = dataset.name + "-" + variant.name
+    index_name = None
+
+    if is_irt(dataset):
+        # assert split is None
+        index_name = dataset.name + "-train"
+    elif is_blp(dataset):
+        index_name = dataset.name + "-train"
+
+        if split is Split.VALID:
+            index_name += "-valid"
+        elif split is Split.TEST:
+            index_name += "-valid-test"
+
+    assert index_name is not None
 
     # fix formatting to valid elastic index format
     index_name = index_name.replace("/", "-").lower()
 
     return index_name
-
-
-# def linking_index_for_irt2(dataset: IRT2, kind: Kind, split: Split) -> ES_INDEX:
-# return dataset.name.replace("/", "-").lower()
-# index =
 
 
 def more_like_this_collapse_search_body(

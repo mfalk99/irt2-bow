@@ -7,10 +7,10 @@ import irt2_bow
 from irt2_bow.types import DatasetConfig, DatasetName, Variant
 
 
-def get_dataset_config(name: DatasetName, variant: Variant, with_subsampling: bool) -> DatasetConfig:
+def get_dataset_config(name: DatasetName, with_subsampling: bool) -> DatasetConfig:
     configs_path = irt2_bow.ENV.DIR.DATA_CONF
 
-    config_file = variant.value
+    config_file = Variant.ORIGINAL.value  # we only evaluate the original variants
     if with_subsampling:
         config_file += "-subsampled"
     config_file += ".yaml"
