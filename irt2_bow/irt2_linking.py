@@ -61,6 +61,7 @@ class LinkingBaseline:
 
         # select valid vids that can be selected from
         valid_vids = self._select_vids(split)
+        mid2vid = self._build_mid2vid_mapping(split)
 
         for mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
 
@@ -69,15 +70,15 @@ class LinkingBaseline:
             similar_mentions = self.retriever.retrieve(
                 query_docs=query_docs,
                 n=max_retrieved_mentions,
-                ignore_mids={mid},
+                # ignore_mids={mid},
             )
 
             # map mentions to vertices
             # make sure that only valid, i.e., known vertices are selected
-            similar_vertices = [
-                vid for mid in similar_mentions for vid in self.dataset.idmap.mid2vids[mid] if mid in valid_vids
-            ]
-            # filter duplicates
+            similar_vertices = [mid2vid[mid] for mid in similar_mentions]
+            similar_vertices = [vid for vid in similar_vertices if vid in valid_vids]
+
+            # filter duplicate vids
             similar_vertices = list(dict.fromkeys(similar_vertices))
 
             # select connected nodes
@@ -127,20 +128,35 @@ class LinkingBaseline:
         return documents
 
     def _select_vids(self, split: Split) -> set[VID]:
-        train_vids = self.dataset.idmap.split2vids[IRT2Split.train]
-        validation_vids = self.dataset.idmap.split2vids[IRT2Split.valid]
-        test_vids = self.dataset.idmap.split2vids[IRT2Split.test]
-
-        if is_blp(self.dataset):
-            if split is Split.VALID:
-                return set.union(train_vids, validation_vids)
-            if split is Split.TEST:
-                return set.union(train_vids, validation_vids, test_vids)
+        train_vids = set(self.dataset.closed_mentions)
+        validation_vids = set(self.dataset.open_mentions_val)
+        test_vids = set(self.dataset.open_mentions_test)
 
         if is_irt(self.dataset):
             return train_vids
 
+        if is_blp(self.dataset):
+            if split is Split.VALID:
+                return train_vids | validation_vids
+            if split is Split.TEST:
+                return train_vids | validation_vids | test_vids
+
         raise ValueError("unexpected setup")
+
+    def _build_mid2vid_mapping(self, split: Split):
+        mid2vid_train = self.dataset.idmap.mid2vid[IRT2Split.train]
+        mid2vid_valid = self.dataset.idmap.mid2vid[IRT2Split.valid]
+        mid2vid_test = self.dataset.idmap.mid2vid[IRT2Split.test]
+
+        if is_irt(self.dataset):
+            return mid2vid_train
+        elif is_blp:
+            if split is Split.VALID:
+                return mid2vid_train | mid2vid_valid
+            elif split is Split.TEST:
+                return mid2vid_train | mid2vid_valid | mid2vid_test
+
+        raise ValueError("unknown setup")
 
     def get_connected_vertices(
         self,
