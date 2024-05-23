@@ -63,10 +63,10 @@ class LinkingBaseline:
         valid_vids = self._select_vids(split)
         mid2vid = self._build_mid2vid_mapping(split)
 
-        for mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
+        for _mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
 
             # query for similar mentions / vertices
-            query_docs = ow_query_docs[mid]
+            query_docs = ow_query_docs[_mid]
             similar_mentions = self.retriever.retrieve(
                 query_docs=query_docs,
                 n=max_retrieved_mentions,
@@ -91,7 +91,7 @@ class LinkingBaseline:
             # build scores based on the order of the vertices found
             scores = build_scores(found=connected_vertices)
 
-            yield (mid, rid), scores
+            yield (_mid, rid), scores
 
     def get_tasks(self, split: Split, task: LinkingTask):
         task_choices = {
@@ -185,11 +185,7 @@ def build_scores(found: list[set[VID]]) -> dict[VID, float]:
 
     for i in range(len(found)):
         # i = 0 => vid: 1.0, i = 1 => vid: 0.5, ...
-        s = {vid: 1 / (i + 1) for vid in found[i]}
-
-        for vid, score in s.items():
-            if vid in scores:
-                assert score < scores[vid]
+        s = {vid: 1 / (i + 1) for vid in found[i] if vid not in scores}
 
         scores.update(s)
 
