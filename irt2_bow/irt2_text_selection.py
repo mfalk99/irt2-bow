@@ -1,5 +1,7 @@
 import random
 import pickle
+import logging
+import yaml
 
 import click
 from tqdm import tqdm
@@ -60,32 +62,30 @@ class TextSelector:
 
     def run_text_selection(
         self, split: Split, task: LinkingTask, mid2texts: dict[MID, list[str]]
-    ) -> dict[tuple[MID, RID], list[str]]:
+    ) -> tuple[dict[tuple[MID, RID], list[str]], dict]:
 
         linking_tasks = self.get_tasks(split=split, task=task)
         valid_vids = list(self.dataset.closed_mentions)
 
-        # cache docs for building queries
-        # ow_contexts = self.get_ow_contexts(split=split)
-        # task_mids = {mid for mid, _ in linking_tasks}
-        # ow_query_docs = self.extract_docs_from_contexts(
-        #     mids=task_mids,
-        #     max_per_mid=max(self.max_similar_query_docs, self.max_order_query_docs),
-        #     contexts=ow_contexts,
-        # )
-
-        # sanity check
-        # assert len(ow_query_docs) == len(task_mids)
-
         # prepare output writer
         output = dict[tuple[MID, RID], list[str]]()
 
-        for _mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
+        num_fills = 0
+        num_selected = 0
+
+        for mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
+
+            if mid not in mid2texts:
+                # edge case: there are no texts for this mention that could be ordered
+                # thus, we simply use an empty list
+                output[(mid, rid)] = []
+                continue
 
             # query related mentions
-            mention_docs = random.sample(mid2texts[_mid], k=min(self.max_similar_query_docs, len(mid2texts[_mid])))
+            mention_docs = random.sample(mid2texts[mid], k=min(self.max_similar_query_docs, len(mid2texts[mid])))
             similar_mentions = self.sim_retriever.retrieve(
-                query_docs=mention_docs, n=self.max_similar_mentions, ignore_mids={_mid}
+                query_docs=mention_docs,
+                n=self.max_similar_mentions,  # , ignore_mids={mid} # there should be no texts in the index that belong to `mid`
             )
 
             # map related mentions to their vertices
@@ -99,8 +99,6 @@ class TextSelector:
             # get known heads / tails
             connected_vertices = self.get_connected_vertices(vids=similar_vertices, rid=rid, task=task)
 
-            # TODO: Ask Felix: es gibt keine train vertices die mit anderen aus valid/test connected sind
-            # connected_mentions = [self.dataset.idmap.vid2mids[vid] for vids in connected_vertices for vid in vids]
             connected_mentions = [
                 self.dataset.idmap.vid2mids[IRT2Split.train][vid] for vids in connected_vertices for vid in vids
             ]
@@ -122,23 +120,32 @@ class TextSelector:
                 connected_mention_docs = connected_mention_docs[: self.max_order_query_docs]
 
                 texts = self.text_retriever.retrieve(
-                    query_docs=connected_mention_docs, mention=_mid, n=self.max_order_texts
+                    query_docs=connected_mention_docs, mention=mid, n=self.max_order_texts
                 )
             else:
                 # edge case: no conntected mention was found to build the order query
                 # we proceed to randomly fill the
+                logging.info("no connected mention for ")
                 pass
 
-            texts, _ = _fill_texts(selected=texts, available_docs=mid2texts[_mid], up_to=self.max_order_texts)
+            texts, fills = _fill_texts(selected=texts, available_docs=mid2texts[mid], up_to=self.max_order_texts)
 
-            assert (_mid, rid) not in output
-            output[(_mid, rid)] = texts
+            num_selected += len(texts)
+            num_fills += fills
+
+            assert (mid, rid) not in output
+            output[(mid, rid)] = texts
 
         # sanity check: every task should be represented in the ouput
         for task in linking_tasks:
             assert task in output
 
-        return output
+        stats = {
+            "num_fills": num_fills,
+            "num_selected": num_selected,
+        }
+
+        return output, stats
 
     def get_tasks(self, split: Split, task: LinkingTask):
         task_choices = {
@@ -205,8 +212,6 @@ def _fill_texts(selected: list[str], available_docs: list[str], up_to: int) -> t
     selected_candidates = candidates[: up_to - len(selected)]
 
     num_filled = len(selected_candidates)
-
-    print(f"Selected: {len(selected)}, filled: {num_filled}")
 
     return selected + selected_candidates, num_filled
 
@@ -308,21 +313,27 @@ def main(
     mid2texts = load_mid2texts(dataset=dataset, split=split)
 
     # init elastic
-    es_index = get_es_index_for_linking(
-        dataset=dataset,
-        split=split,
-    )
     es_client = get_client()
 
     # select texts
+    similar_mentions_index = get_es_index_for_linking(
+        dataset=dataset,
+    )
     similar_mentions_retriever: SimilarMentionsRetriever = MoreLikeThisMentionsRetriever(
         es_client=es_client,
-        es_index=es_index,
+        es_index=similar_mentions_index,
+    )
+    print(f"Using index '{similar_mentions_index}' for similar-mentions-selection")
+
+    order_text_index = get_es_index_for_linking(
+        dataset=dataset,
+        split=split,
     )
     order_texts_retriever: TextRetriever = ElasticTextRetriever(
-        index=es_index,
+        index=order_text_index,
         client=es_client,
     )
+    print(f"Using index '{order_text_index}' for text-ordering")
 
     selector = TextSelector(
         dataset=dataset,
@@ -334,10 +345,36 @@ def main(
         max_order_texts=num_order_texts,
     )
 
-    output = selector.run_text_selection(split=split, task=task, mid2texts=mid2texts)
+    output, stats = selector.run_text_selection(split=split, task=task, mid2texts=mid2texts)
 
     print(f"Saving output to '{out}'")
     pickle.dump(output, open(out, "wb"))
+
+    # save details
+    details = {
+        "task": task.value,
+        "options": {
+            "num_sim_query_docs": num_sim_query_docs,
+            "num_sim_mentions": num_sim_mentions,
+            "num_order_query_docs": num_order_query_docs,
+            "num_order_texts": num_order_texts,
+        },
+        "dataset": {
+            "dataset_name": dataset.name,
+            "data": str(dataset),
+            "with_subsampling": with_subsampling,
+        },
+        "elastic": {
+            "similar_mentions_index": similar_mentions_index,
+            "order_text_index": order_text_index,
+        },
+        "out_path": out,
+        "stats": {**stats},
+    }
+
+    details_out = out + ".yaml"
+    print(f"Saving details to {details_out}")
+    yaml.safe_dump(details, open(details_out, "w"))
 
 
 if __name__ == "__main__":
