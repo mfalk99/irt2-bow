@@ -1,10 +1,12 @@
+import pickle
+
 from irt2.dataset import IRT2
 from irt2.types import VID, RID, MID
 
 from irt2.loader import LOADER
 from irt2.dataset import IRT2
 import irt2_bow
-from irt2_bow.types import DatasetConfig, DatasetName, Variant
+from irt2_bow.types import DatasetConfig, DatasetName, Variant, Split
 
 
 def get_dataset_config(name: DatasetName, with_subsampling: bool) -> DatasetConfig:
@@ -55,6 +57,12 @@ def dataset_from_config(config: DatasetConfig) -> IRT2:
 
     print(f"loaded {str(dataset)}")
     return dataset
+
+
+def load_mid2texts(dataset: IRT2, split: Split) -> dict[MID, list[str]]:
+    # path = irt2_bow.ENV.DIR.MAPPINGS_DIR / f"{dataset.name.replace('/', '-')}-{split.value}.pkl"
+    path = irt2_bow.ENV.DIR.MAPPINGS_DIR / f"{dataset.name.replace('/', '-')}.pkl"
+    return pickle.load(open(path, "rb"))
 
 
 def is_irt(dataset: IRT2) -> bool:

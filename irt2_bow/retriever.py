@@ -13,7 +13,7 @@ class SimilarMentionsRetriever(ABC):
         query_docs: list[QueryDoc],
         n: int,
         ignore_mids: set[MID] | None = None,
-    ) -> list[VID]:
+    ) -> list[MID]:
         """Based on `query_docs`, this function returns connected closed-world vertices.
 
         Parameters
@@ -50,7 +50,7 @@ class MoreLikeThisMentionsRetriever(SimilarMentionsRetriever):
         self.es_index = es_index
         self.es_client = es_client
 
-    def retrieve(self, query_docs: list[str], n: int, ignore_mids: set[MID] | None = None) -> list[VID]:
+    def retrieve(self, query_docs: list[str], n: int, ignore_mids: set[MID] | None = None) -> list[MID]:
         ignore_mids = ignore_mids or set()
 
         # query_data = [qd.data for qd in query_docs]
@@ -109,6 +109,7 @@ def more_like_this_collapse_search_body_optim(
     ignore_mids: set[MID] | None = None,
 ):
     ignore_mids = ignore_mids or set()
+    assert len(ignore_mids) == 0, "ignore_mids not supported"
 
     return {
         "query": {
@@ -121,11 +122,12 @@ def more_like_this_collapse_search_body_optim(
                         "max_query_terms": 12,
                     }
                 },
-                "filter": {
-                    "terms": {
-                        "mid": list(ignore_mids),
-                    },
-                },
+                # ! wrong
+                # "filter": {
+                #     "terms": {
+                #         "mid": list(ignore_mids),
+                #     },
+                # },
             }
         },
         "collapse": {"field": "mid.keyword"},
@@ -176,18 +178,18 @@ class ElasticTextRetriever(TextRetriever):
         self.client = client
 
     def retrieve(self, query_docs: list[QueryDoc], mention: MID, n: VID) -> list[set]:
-        body = order_mention_texts_query(docs=query_docs, mid=mention)
+        body = order_mention_texts_query(docs=query_docs, mention=mention)
         response = self.client.search(
             body=body,
             index=self.index,
             size=n,
         )
 
-        hits = [hit for hit in response["hits"]["hits"]]
+        hits = [hit["_source"] for hit in response["hits"]["hits"]]
 
         # sanity check
         for hit in hits:
-            assert hit["mid"] == mention
+            assert hit["mid"] == mention, f"MID of hit ({hit['mid']}) does not belon got mention ({mention})"
 
         return [hit["data"] for hit in hits]
 
@@ -196,15 +198,21 @@ def order_mention_texts_query(docs: list[str], mention: MID):
     return {
         "query": {
             "bool": {
-                "must": {
-                    "more_like_this": {
-                        "fields": ["data"],
-                        "like": " ".join(docs),
-                        "min_term_freq": 1,
-                        "max_query_terms": 12,
+                "filter": {
+                    "term": {
+                        "mid": mention,
                     },
-                    "match": {"mid": mention},
                 },
+                "should": [
+                    {
+                        "more_like_this": {
+                            "fields": ["data"],
+                            "like": " ".join(docs),
+                            "min_term_freq": 1,
+                            "max_query_terms": 12,
+                        }
+                    },
+                ],
             }
-        }
+        },
     }
