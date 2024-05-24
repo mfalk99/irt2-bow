@@ -162,3 +162,5 @@ cython_debug/
 
 elastic/.data
 runs*
+.local*
+.vscode
