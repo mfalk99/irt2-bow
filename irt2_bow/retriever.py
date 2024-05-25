@@ -189,7 +189,7 @@ class ElasticTextRetriever(TextRetriever):
 
         # sanity check
         for hit in hits:
-            assert hit["mid"] == mention, f"MID of hit ({hit['mid']}) does not belon got mention ({mention})"
+            assert hit["mid"] == mention, f"MID of hit ({hit['mid']}) does not match mention ({mention})"
 
         return [hit["data"] for hit in hits]
 
@@ -212,7 +212,29 @@ def order_mention_texts_query(docs: list[str], mention: MID):
                             "max_query_terms": 12,
                         }
                     },
+                    # {"term": {"mid.keyword": {"value": mention, "boost": 10}}},
                 ],
-            }
+            },
         },
     }
+    # return {
+    #     "query": {
+    #         "bool": {
+    #             "filter": {
+    #                 "term": {
+    #                     "mid": mention,
+    #                 },
+    #             },
+    #             "should": [
+    #                 {
+    #                     "more_like_this": {
+    #                         "fields": ["data"],
+    #                         "like": " ".join(docs),
+    #                         "min_term_freq": 1,
+    #                         "max_query_terms": 12,
+    #                     }
+    #                 },
+    #             ],
+    #         }
+    #     },
+    # }

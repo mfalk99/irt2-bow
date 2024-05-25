@@ -164,3 +164,4 @@ elastic/.data
 runs*
 .local*
 .vscode
+reports

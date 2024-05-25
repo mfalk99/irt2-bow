@@ -29,6 +29,16 @@ class Split(enum.Enum):
         return {item.value for item in Split}
 
 
+class MentionSplit(enum.Enum):
+    TRAIN = "training"
+    VALID = "validation"
+    TEST = "testing"
+
+    @staticmethod
+    def values() -> set[str]:
+        return {item.value for item in MentionSplit}
+
+
 class RankingTask(enum.Enum):
     HEADS = "heads"
     TAILS = "tails"

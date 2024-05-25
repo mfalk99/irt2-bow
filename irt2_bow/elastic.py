@@ -1,6 +1,6 @@
 from elasticsearch import Elasticsearch
 
-from irt2_bow.types import Variant, Split
+from irt2_bow.types import Split, MentionSplit
 from irt2_bow.utils import is_irt, is_blp
 from irt2.dataset import IRT2
 from irt2.types import MID
@@ -27,8 +27,12 @@ def get_es_index_for_linking(dataset: IRT2, split: Split | None = None) -> ES_IN
     index_name = None
 
     if is_irt(dataset):
-        # assert split is None
-        index_name = dataset.name + "-train"
+
+        if split is None:
+            index_name = dataset.name + "-train"
+        else:
+            index_name = dataset.name + f"-{split.value}"
+
     elif is_blp(dataset):
         index_name = dataset.name + "-train"
 
@@ -38,6 +42,22 @@ def get_es_index_for_linking(dataset: IRT2, split: Split | None = None) -> ES_IN
             index_name += "-valid-test"
 
     assert index_name is not None
+
+    # fix formatting to valid elastic index format
+    index_name = index_name.replace("/", "-").lower()
+
+    return index_name
+
+
+def es_index_by_mention_splits(dataset: IRT2, splits: set[MentionSplit]) -> ES_INDEX:
+
+    available_splits = [MentionSplit.TRAIN, MentionSplit.VALID, MentionSplit.TEST]
+
+    index_name = dataset.name
+
+    for s in available_splits:
+        if s in splits:
+            index_name += f"-{s.value}"
 
     # fix formatting to valid elastic index format
     index_name = index_name.replace("/", "-").lower()
