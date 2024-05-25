@@ -17,9 +17,9 @@ from irt2_bow.utils import (
     is_blp,
     is_irt,
 )
-from irt2_bow.elastic import get_client, get_es_index_for_linking
+from irt2_bow.elastic import get_client, get_es_index_for_linking, es_index_by_mention_splits
 from irt2_bow.types import DatasetName
-from irt2_bow.types import Split, LinkingTask
+from irt2_bow.types import Split, LinkingTask, MentionSplit
 from irt2_bow.retriever import SimilarMentionsRetriever, MoreLikeThisMentionsRetriever
 
 # The maximum number of docs used for building a query
@@ -63,10 +63,10 @@ class LinkingBaseline:
         valid_vids = self._select_vids(split)
         mid2vid = self._build_mid2vid_mapping(split)
 
-        for _mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
+        for mid, rid in tqdm(linking_tasks, desc=f"Running {task} tasks"):
 
             # query for similar mentions / vertices
-            query_docs = ow_query_docs[_mid]
+            query_docs = ow_query_docs[mid]
             similar_mentions = self.retriever.retrieve(
                 query_docs=query_docs,
                 n=max_retrieved_mentions,
@@ -91,7 +91,7 @@ class LinkingBaseline:
             # build scores based on the order of the vertices found
             scores = build_scores(found=connected_vertices)
 
-            yield (_mid, rid), scores
+            yield (mid, rid), scores
 
     def get_tasks(self, split: Split, task: LinkingTask):
         task_choices = {
@@ -130,16 +130,16 @@ class LinkingBaseline:
     def _select_vids(self, split: Split) -> set[VID]:
         train_vids = set(self.dataset.closed_mentions)
         validation_vids = set(self.dataset.open_mentions_val)
-        test_vids = set(self.dataset.open_mentions_test)
+        # test_vids = set(self.dataset.open_mentions_test)
 
         if is_irt(self.dataset):
             return train_vids
 
         if is_blp(self.dataset):
             if split is Split.VALID:
-                return train_vids | validation_vids
+                return train_vids  # | validation_vids
             if split is Split.TEST:
-                return train_vids | validation_vids | test_vids
+                return train_vids | validation_vids  # | test_vids
 
         raise ValueError("unexpected setup")
 
@@ -288,10 +288,30 @@ def main(
     print(f"Loaded {str(dataset)} from {dataset_config.path}")
 
     # init elastic
-    es_index = get_es_index_for_linking(
-        dataset=dataset,
-        split=split,
-    )
+    es_index = None
+    if is_irt(dataset):
+        es_index = get_es_index_for_linking(
+            dataset=dataset,
+            split=split,
+        )
+    elif is_blp(dataset):
+        if split is Split.VALID:
+            es_index = es_index_by_mention_splits(
+                dataset=dataset,
+                splits={
+                    MentionSplit.TRAIN,
+                    MentionSplit.VALID,
+                },
+            )
+        elif split is Split.TEST:
+            es_index = es_index_by_mention_splits(
+                dataset=dataset,
+                splits={
+                    MentionSplit.TRAIN,
+                    MentionSplit.VALID,
+                    MentionSplit.TEST,
+                },
+            )
     es_client = get_client()
 
     # log experiment config
