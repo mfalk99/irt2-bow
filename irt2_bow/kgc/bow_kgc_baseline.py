@@ -29,7 +29,7 @@ DEFAULT_MAX_QUERY_DOCS = 10
 DEFAULT_MAX_RETRIEVED_MIDS = 100
 
 
-class LinkingBaseline:
+class BowKGCBaseline:
 
     dataset: IRT2
 
@@ -290,9 +290,10 @@ def main(
     # init elastic
     es_index = None
     if is_irt(dataset):
-        es_index = get_es_index_for_linking(
+        es_index = es_index_by_mention_splits(
             dataset=dataset,
-            split=split,
+            splits={MentionSplit.TRAIN},
+            subsample=with_subsampling,
         )
     elif is_blp(dataset):
         if split is Split.VALID:
@@ -302,6 +303,7 @@ def main(
                     MentionSplit.TRAIN,
                     MentionSplit.VALID,
                 },
+                subsample=with_subsampling,
             )
         elif split is Split.TEST:
             es_index = es_index_by_mention_splits(
@@ -311,6 +313,7 @@ def main(
                     MentionSplit.VALID,
                     MentionSplit.TEST,
                 },
+                subsample=with_subsampling,
             )
     es_client = get_client()
 
@@ -337,7 +340,7 @@ def main(
         es_index=es_index,
         es_client=es_client,
     )
-    linking = LinkingBaseline(
+    linking = BowKGCBaseline(
         dataset=dataset,
         retriever=retriever,
     )

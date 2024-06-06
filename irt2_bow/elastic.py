@@ -49,7 +49,7 @@ def get_es_index_for_linking(dataset: IRT2, split: Split | None = None) -> ES_IN
     return index_name
 
 
-def es_index_by_mention_splits(dataset: IRT2, splits: set[MentionSplit]) -> ES_INDEX:
+def es_index_by_mention_splits(dataset: IRT2, splits: set[MentionSplit], subsample: bool) -> ES_INDEX:
 
     available_splits = [MentionSplit.TRAIN, MentionSplit.VALID, MentionSplit.TEST]
 
@@ -59,35 +59,10 @@ def es_index_by_mention_splits(dataset: IRT2, splits: set[MentionSplit]) -> ES_I
         if s in splits:
             index_name += f"-{s.value}"
 
+    if subsample:
+        index_name += "--subsample"
+
     # fix formatting to valid elastic index format
     index_name = index_name.replace("/", "-").lower()
 
     return index_name
-
-
-def more_like_this_collapse_search_body(
-    docs: tuple[str],
-    ignore_mids: set[MID] | None = None,
-):
-    ignore_mids = ignore_mids or set()
-
-    return {
-        "query": {
-            "bool": {
-                "must": {
-                    "more_like_this": {
-                        "fields": ["data"],
-                        "like": " ".join(docs),
-                        "min_term_freq": 1,
-                        "max_query_terms": 12,
-                    }
-                },
-                "must_not": {
-                    "terms": {
-                        "mid": list(ignore_mids),
-                    },
-                },
-            }
-        },
-        "collapse": {"field": "mid.keyword"},
-    }

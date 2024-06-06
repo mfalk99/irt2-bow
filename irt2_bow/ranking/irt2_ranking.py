@@ -18,7 +18,9 @@ from irt2_bow.elastic import ES_INDEX, more_like_this_collapse_search_body, get_
 from irt2_bow.utils import get_heads, get_tails, extract_query_documents, get_docs_for_mids
 
 
-# NOTE: Check this file
+# NOTE: This file is taken from the previous repository and has to be further adapted to
+# the code in this repository
+# Specifically, loading the datasets and document indexing has to be implemented/adapted for the RANKING task
 
 DEFAULT_MAX_QUERY_DOC = 100
 

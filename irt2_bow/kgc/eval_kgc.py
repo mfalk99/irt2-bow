@@ -1,11 +1,42 @@
 import click
+import csv
 
 import irt2.evaluation as eval
+from irt2.dataset import IRT2
 
 from irt2_bow.types import Split, DatasetName
 from irt2_bow.utils import get_dataset_config, dataset_from_config
 
 DEFAULT_MAX_RANK = 10
+
+
+def _load_preds(csv_file: str) -> list[tuple[int, int]]:
+    rows = csv.reader(open(csv_file))
+    return [(int(r[0]), int(r[1])) for r in rows]
+
+
+def _validate_head_tasks(dataset: IRT2, split: Split, preds_file: str):
+    GT_TASK_OPTIONS = {
+        Split.VALID: dataset.open_kgc_val_heads,
+        Split.TEST: dataset.open_kgc_test_heads,
+    }
+
+    gt_tasks = set(GT_TASK_OPTIONS[split])
+    pred_tasks = set(_load_preds(preds_file))
+
+    assert gt_tasks == pred_tasks, f"GT:\n{gt_tasks}\n\nPREDS:\n{pred_tasks}"
+
+
+def _validate_tail_tasks(dataset: IRT2, split: Split, preds_file: str):
+    GT_TASK_OPTIONS = {
+        Split.VALID: dataset.open_kgc_val_tails,
+        Split.TEST: dataset.open_kgc_test_tails,
+    }
+
+    gt_tasks = set(GT_TASK_OPTIONS[split])
+    pred_tasks = set(_load_preds(preds_file))
+
+    assert gt_tasks == pred_tasks, f"GT:\n{gt_tasks}\n\nPREDS:\n{pred_tasks}"
 
 
 @click.command()
@@ -78,6 +109,10 @@ def main(
     dataset_config = get_dataset_config(name=dataset_name, with_subsampling=with_subsampling)
     dataset = dataset_from_config(dataset_config)
     print(f"Loaded {str(dataset)} from {dataset_config.path}")
+
+    # validate that there are predictions for every task
+    _validate_head_tasks(dataset=dataset, split=split, preds_file=head_task)
+    _validate_tail_tasks(dataset=dataset, split=split, preds_file=tail_task)
 
     metrics = eval.evaluate(
         dataset,
