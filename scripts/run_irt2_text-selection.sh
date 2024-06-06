@@ -1,7 +1,7 @@
 DATASETS=(
-    # "irt2/tiny"
-    # "irt2/small"
-    # "irt2/medium"
+    "irt2/tiny"
+    "irt2/small"
+    "irt2/medium"
     "irt2/large"
 )
 
@@ -15,7 +15,7 @@ SPLITS=(
     test
 )
 
-OUT_DIR="/mnt/data/dok/maurice/irt/irt2-bow/runs/text-selection"
+OUT_DIR="./"
 
 for dataset in ${!DATASETS[@]}; do
     for split in ${!SPLITS[@]}; do        

@@ -1,12 +1,11 @@
 DATASETS=(
-    # "blp/fb15k237"
-    # "blp/wn18rr"
-    # "blp/wikidata5m"
+    "blp/fb15k237"
+    "blp/wn18rr"
 
     "irt2/tiny"
-    # "irt2/small"
-    # "irt2/medium"
-    # "irt2/large"
+    "irt2/small"
+    "irt2/medium"
+    "irt2/large"
 )
 
 TASKS=(
@@ -19,7 +18,7 @@ SPLITS=(
     test
 )
 
-OUT_DIR="/mnt/data/dok/maurice/irt/irt2-bow/runs"
+OUT_DIR="./";
 
 for dataset in ${!DATASETS[@]}; do
     for split in ${!SPLITS[@]}; do
