@@ -9,7 +9,7 @@ from irt2.types import MID, Split as IRT2Split
 
 from irt2_bow.elastic import get_client, es_index_by_mention_splits, ES_INDEX
 from irt2_bow.types import MentionSplit, DatasetName
-from irt2_bow.utils import get_dataset_config, dataset_from_config, is_blp
+from irt2_bow.utils import get_dataset_config, dataset_from_config
 
 
 def _index(dataset: IRT2, splits: set[MentionSplit], client: Elasticsearch, index: ES_INDEX, subsample: bool):
@@ -23,13 +23,13 @@ def _index(dataset: IRT2, splits: set[MentionSplit], client: Elasticsearch, inde
     for split in splits:
 
         valid_mids = None
-        if subsample and is_blp(dataset):
+        if subsample:
             VALID_MID_OPTIONS = {
                 MentionSplit.TRAIN: dataset.idmap.mid2vid[IRT2Split.train],
                 MentionSplit.VALID: dataset.idmap.mid2vid[IRT2Split.valid],
                 MentionSplit.TEST: dataset.idmap.mid2vid[IRT2Split.test],
             }
-            valid_mids = VALID_MID_OPTIONS[split]
+            valid_mids = set(VALID_MID_OPTIONS[split])
             assert len(valid_mids) > 0
 
         print(f"Indexing {split.name} contexts")
